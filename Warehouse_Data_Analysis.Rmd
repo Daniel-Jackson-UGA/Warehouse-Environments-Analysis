@@ -1,0 +1,1347 @@
+---
+title: "Warehouse Data Analysis"
+output: html_document
+date: "2026-08-12"
+---
+This notebook is designed to analyze environmental data collected from a warehouse. The analysis will include data cleaning, visualization, and statistical modeling to understand the environmental conditions within the warehouse.
+
+# Setup 
+
+## Load Packages 
+```{r}
+# Load packages
+library(readxl)
+library(dplyr)
+library(ggplot2)
+library(plotly)
+library(gstat)
+library(sp)
+library(lubridate)
+library(viridisLite)
+```
+
+## Import Excel data
+```{r}
+setwd("C:/Users/Daniel Jackson/Desktop/R/Warehouse Environments Analysis/")
+
+
+# Import Excel data
+data <- read_excel("./Data/Wifi_Test_B_Farms.xlsx")
+
+# Look at the first rows
+head(data)
+```
+
+## Convert the timestamp
+```{r}
+data <- data %>%
+  mutate(
+    Timestamp = as.POSIXct(
+      Timestamp,
+      format = "%Y-%m-%d %H:%M",
+      tz = "UTC"
+    )
+  )
+
+head(data$Timestamp)
+```
+
+# Define the room dimensions
+
+For now, let's use the dimensions represented by our sample dataset:
+```{r}
+# ============================================================
+# DEFINE ROOM DIMENSIONS
+# ============================================================
+
+# Coordinate system:
+#
+# Origin (0, 0, 0) = back-left-floor
+#
+# X = Width
+# X increases from left → right
+# Total width = 25 ft
+#
+# Y = Length
+# Y increases from back → front
+# Total length = 35 ft
+#
+# Z = Height
+# Z increases from floor → ceiling
+# Total height = 30 ft
+
+room_width  <- 25
+room_length <- 35
+room_height <- 30
+
+
+room <- list(
+  width = room_width,
+  length = room_length,
+  height = room_height
+)
+
+room
+```
+
+
+
+## Create the room boundaries
+```{r}
+# ============================================================
+# CREATE ROOM BOUNDARIES
+# ============================================================
+
+corners <- data.frame(
+
+  X = c(
+    0,
+    room_width,
+    room_width,
+    0,
+    0,
+    room_width,
+    room_width,
+    0
+  ),
+
+  Y = c(
+    0,
+    0,
+    room_length,
+    room_length,
+    0,
+    0,
+    room_length,
+    room_length
+  ),
+
+  Z = c(
+    0,
+    0,
+    0,
+    0,
+    room_height,
+    room_height,
+    room_height,
+    room_height
+  )
+
+)
+
+corners$ID <- c(
+  "A",
+  "B",
+  "C",
+  "D",
+  "E",
+  "F",
+  "G",
+  "H"
+)
+
+corners
+```
+The corners are:
+
+          E -------- F
+         /|         /|
+        / |        / |
+       G -------- H  |
+       |  |       |  |
+       |  A ------|--B
+       | /        | /
+       |/         |/
+       C -------- D
+
+Where:
+
+A = bottom-back-left
+B = bottom-back-right
+C = bottom-front-right
+D = bottom-front-left
+E = top-back-left
+F = top-back-right
+G = top-front-right
+H = top-front-left
+
+
+Create the 12 edges
+```{r}
+# --------------------------------------------------
+# Define the 12 edges
+# --------------------------------------------------
+
+edge_pairs <- data.frame(
+
+  from = c(
+    "A", "B", "C", "D",
+    "E", "F", "G", "H",
+    "A", "B", "C", "D"
+  ),
+
+  to = c(
+    "B", "C", "D", "A",
+    "F", "G", "H", "E",
+    "E", "F", "G", "H"
+  )
+
+)
+
+edge_pairs
+```
+
+### Convert the edges into Plotly coordinates
+```{r}
+# --------------------------------------------------
+# Build plotting data for the room edges
+# --------------------------------------------------
+
+room_edges <- do.call(
+  rbind,
+  lapply(
+    1:nrow(edge_pairs),
+    function(i) {
+
+      start <- corners[
+        corners$ID == edge_pairs$from[i],
+      ]
+
+      end <- corners[
+        corners$ID == edge_pairs$to[i],
+      ]
+
+      data.frame(
+        X = c(start$X, end$X, NA),
+        Y = c(start$Y, end$Y, NA),
+        Z = c(start$Z, end$Z, NA)
+      )
+    }
+  )
+)
+
+rownames(room_edges) <- NULL
+
+head(room_edges, 15)
+```
+## Plot the room
+```{r}
+plot_ly(
+  data = room_edges,
+
+  x = ~X,
+  y = ~Y,
+  z = ~Z,
+
+  type = "scatter3d",
+  mode = "lines",
+
+  line = list(
+    width = 5,
+    color = "black"
+  ),
+
+  name = "Room"
+) %>%
+
+  layout(
+
+    scene = list(
+
+      xaxis = list(
+  title = "Width (ft)",
+  range = c(0, room_width)
+),
+
+yaxis = list(
+  title = "Length (ft)",
+  range = c(0, room_length)
+),
+
+zaxis = list(
+  title = "Height (ft)",
+  range = c(0, room_height)
+),
+
+      aspectmode = "data"
+    ),
+
+    title = "Cold Storage Room Geometry"
+  )
+```
+
+# Plot the actual sensor locations in 3D
+```{r}
+  plot_ly(
+  data,
+  x = ~X_ft,
+  y = ~Y_ft,
+  z = ~Z_ft,
+  type = "scatter3d",
+  mode = "markers",
+  color = ~Temperature_F,
+  colors = viridis(100),
+  text = ~paste(
+    "Sensor:", Sensor_ID,
+    "<br>X:", X_ft,
+    "<br>Y:", Y_ft,
+    "<br>Z:", Z_ft,
+    "<br>Temperature:", round(Temperature_F, 2), "°F",
+    "<br>RH:", round(Relative_Humidity_pct, 1), "%"
+  ),
+  hoverinfo = "text",
+  marker = list(
+    size = 7
+  )
+) %>%
+  layout(
+    scene = list(
+      xaxis = list(title = "Width X (ft)"),
+      yaxis = list(title = "Length Y (ft)"),
+      zaxis = list(title = "Height Z (ft)"),
+      aspectmode = "data"
+    ),
+    title = "3D Sensor Locations"
+  )
+
+```
+
+### Check that the sensors are within the room boundaries
+```{r}
+sensor_check <- data %>%
+
+  mutate(
+
+    Inside_Room =
+      X_ft >= 0 &
+      X_ft <= room_width &
+
+      Y_ft >= 0 &
+      Y_ft <= room_length &
+
+      Z_ft >= 0 &
+      Z_ft <= room_height
+
+  )
+
+table(sensor_check$Inside_Room)
+```
+Output should equal number of lines in the data frame. If not, some sensors are outside the room boundaries.
+
+## Combine the Room and Sensors into the same 3D plot
+```{r}
+# ============================================================
+# 3D ROOM + SENSOR LOCATIONS
+# ============================================================
+
+sensor_text <- paste(
+  "Sensor:", data$Sensor_ID,
+  "<br>X:", data$X_ft, " ft",
+  "<br>Y:", data$Y_ft, " ft",
+  "<br>Z:", data$Z_ft, " ft",
+  "<br>Temperature:",
+  round(data$Temperature_F, 2), " °F",
+  "<br>RH:",
+  round(data$Relative_Humidity_pct, 1), " %"
+)
+
+
+P <- plot_ly(
+
+  # ----------------------------------------------------------
+  # SENSOR TRACE
+  # ----------------------------------------------------------
+
+  x = data$X_ft,
+  y = data$Y_ft,
+  z = data$Z_ft,
+
+  type = "scatter3d",
+  mode = "markers",
+
+  color = data$Temperature_F,
+
+  colors = viridis(100),
+
+  text = sensor_text,
+
+  hoverinfo = "text",
+
+  marker = list(
+    size = 7
+  ),
+
+  name = "Sensors"
+
+) %>%
+
+  # ----------------------------------------------------------
+  # ROOM TRACE
+  # ----------------------------------------------------------
+
+  add_trace(
+
+    x = room_edges$X,
+    y = room_edges$Y,
+    z = room_edges$Z,
+
+    type = "scatter3d",
+    mode = "lines",
+
+    line = list(
+      width = 5,
+      color = "black"
+    ),
+
+    name = "Room",
+
+    hoverinfo = "none",
+
+    inherit = FALSE
+
+  ) %>%
+
+  # ----------------------------------------------------------
+  # LAYOUT
+  # ----------------------------------------------------------
+
+  layout(
+
+    scene = list(
+
+      # X = WIDTH
+      xaxis = list(
+        title = "Width (ft)",
+        range = c(
+          0,
+          room_width
+        )
+      ),
+
+      # Y = LENGTH
+      yaxis = list(
+        title = "Length (ft)",
+        range = c(
+          0,
+          room_length
+        )
+      ),
+
+      # Z = HEIGHT
+      zaxis = list(
+        title = "Height (ft)",
+        range = c(
+          0,
+          room_height
+        )
+      ),
+
+      aspectmode = "data"
+
+    ),
+
+    title = "3D Sensor Locations"
+
+  )
+
+
+P
+```
+
+## Add a Temperature_C column to the data frame
+```{r}
+data <- data %>%
+  mutate(
+    Temperature_C =
+      (Temperature_F - 32) * 5 / 9
+  )
+```
+
+
+## Calculate dew point
+```{r}
+data <- data %>%
+  mutate(
+    gamma =
+      log(Relative_Humidity_pct / 100) +
+      (
+        17.625 * Temperature_C
+      ) /
+      (
+        243.04 + Temperature_C
+      ),
+
+    Dew_Point_C =
+      243.04 * gamma /
+      (
+        17.625 - gamma
+      )
+
+  )
+```
+
+## Calculate dew point depression
+```{r}
+data <- data %>%
+
+  mutate(
+
+    Dew_Point_F =
+      Dew_Point_C * 9 / 5 + 32,
+
+    Dew_Point_Depression_F =
+      Temperature_F - Dew_Point_F
+
+  ) %>%
+
+  select(
+    -gamma
+  )
+```
+
+### Check to confirm 
+```{r}
+names(data)
+```
+# Interpolation
+
+## Set Grid Resolution 
+```{r}
+grid_resolution_x <- 2  # ft
+grid_resolution_y <- 2   # ft
+grid_resolution_z <- 2  # ft
+
+idw_power <- 2
+```
+
+## Create a grid for interpolation
+```{r}
+interpolation_grid <- expand.grid(
+
+  X_ft = seq(
+    0,
+    room_width,
+    by = grid_resolution_x
+  ),
+
+  Y_ft = seq(
+    0,
+    room_length,
+    by = grid_resolution_y
+  ),
+
+  Z_ft = seq(
+    0,
+    room_height,
+    by = grid_resolution_z
+  )
+
+)
+
+nrow(interpolation_grid)
+```
+## IDW Interpolation Function
+```{r}
+# ============================================================
+# IDW INTERPOLATION FUNCTION
+# ============================================================
+
+interpolate_variable <- function(
+    sensor_data,
+    grid,
+    variable,
+    idp = 2
+) {
+
+  # ----------------------------------------------------------
+  # Keep complete observations for this variable
+  # ----------------------------------------------------------
+
+  sensor_data <- sensor_data %>%
+
+    filter(
+      !is.na(.data[[variable]]),
+      !is.na(X_ft),
+      !is.na(Y_ft),
+      !is.na(Z_ft)
+    )
+
+
+  # ----------------------------------------------------------
+  # Convert sensor locations to SpatialPointsDataFrame
+  # ----------------------------------------------------------
+
+  coordinates(sensor_data) <-
+    ~X_ft + Y_ft + Z_ft
+
+
+  # ----------------------------------------------------------
+  # Convert interpolation grid to SpatialPoints
+  # ----------------------------------------------------------
+
+  coordinates(grid) <-
+    ~X_ft + Y_ft + Z_ft
+
+
+  # ----------------------------------------------------------
+  # IDW interpolation
+  # ----------------------------------------------------------
+
+  result <- gstat::idw(
+
+    formula =
+      as.formula(
+        paste(
+          variable,
+          "~ 1"
+        )
+      ),
+
+    locations = sensor_data,
+
+    newdata = grid,
+
+    idp = idp
+
+  )
+
+
+  # ----------------------------------------------------------
+  # Return ordinary data frame
+  # ----------------------------------------------------------
+
+  result <- as.data.frame(result)
+
+
+  # Rename predicted value
+  names(result)[
+    names(result) == "var1.pred"
+  ] <- paste0(
+    "Predicted_",
+    variable
+  )
+
+
+  # Keep only required fields
+  result %>%
+
+    select(
+      X_ft,
+      Y_ft,
+      Z_ft,
+      starts_with("Predicted_")
+    )
+
+}
+```
+
+## Test Function Using the Earliest Timestamp
+```{r}
+
+test_time <- min(
+  data$Timestamp
+)
+
+test_sensors <- data %>%
+  filter(
+    Timestamp == test_time
+  )
+nrow(test_sensors)
+```
+```{r}
+temperature_test <- interpolate_variable(
+  sensor_data = test_sensors,
+  grid = interpolation_grid,
+  variable = "Temperature_F",
+  idp = idw_power
+)
+
+head(temperature_test)
+```
+
+
+## Interpolate all four variables
+```{r}
+# ============================================================
+# INTERPOLATE ALL ENVIRONMENTAL VARIABLES
+# ============================================================
+
+temperature_test <- interpolate_variable(
+  test_sensors,
+  interpolation_grid,
+  "Temperature_F",
+  idw_power
+)
+
+
+rh_test <- interpolate_variable(
+  test_sensors,
+  interpolation_grid,
+  "Relative_Humidity_pct",
+  idw_power
+)
+
+
+dew_point_test <- interpolate_variable(
+  test_sensors,
+  interpolation_grid,
+  "Dew_Point_F",
+  idw_power
+)
+
+
+dpd_test <- interpolate_variable(
+  test_sensors,
+  interpolation_grid,
+  "Dew_Point_Depression_F",
+  idw_power
+)
+```
+### Combine the interpolated results into a single data frame
+```{r}
+# ============================================================
+# COMBINE INTERPOLATED VARIABLES
+# ============================================================
+
+test_field <- temperature_test %>%
+
+  left_join(
+    rh_test,
+    by = c(
+      "X_ft",
+      "Y_ft",
+      "Z_ft"
+    )
+  ) %>%
+
+  left_join(
+    dew_point_test,
+    by = c(
+      "X_ft",
+      "Y_ft",
+      "Z_ft"
+    )
+  ) %>%
+
+  left_join(
+    dpd_test,
+    by = c(
+      "X_ft",
+      "Y_ft",
+      "Z_ft"
+    )
+  ) %>%
+
+  mutate(
+    Timestamp = test_time
+  )
+```
+
+```{r}
+names(test_field)
+```
+## Visualize the interpolated temperature field in 3D
+```{r}
+# ============================================================
+# 3D INTERPOLATED TEMPERATURE FIELD
+# ============================================================
+
+plot_ly(
+
+  data = test_field,
+
+  x = ~X_ft,
+  y = ~Y_ft,
+  z = ~Z_ft,
+
+  color = ~Predicted_Temperature_F,
+
+  colors = viridis(
+    100
+  ),
+
+  type = "scatter3d",
+
+  mode = "markers",
+
+  marker = list(
+    size = 8,
+    opacity = 0.20,
+    symbol = "square"
+  ),
+
+  hoverinfo = "none"
+
+) %>%
+
+  layout(
+
+    scene = list(
+
+      xaxis = list(
+        title = "Width X (ft)",
+        range = c(
+          0,
+          room_width
+        )
+      ),
+
+      yaxis = list(
+        title = "Length Y (ft)",
+        range = c(
+          0,
+          room_length
+        )
+      ),
+
+      zaxis = list(
+        title = "Height Z (ft)",
+        range = c(
+          0,
+          room_height
+        )
+      ),
+
+      aspectmode = "data"
+
+    ),
+
+    title = paste(
+      "Interpolated Temperature Field —",
+      format(
+        test_time,
+        "%Y-%m-%d %H:%M"
+      )
+    )
+
+  )
+```
+
+## Add Sensor Data 
+```{r}
+# ============================================================
+# ADD ACTUAL SENSOR LOCATIONS
+# ============================================================
+
+sensor_plot_data <- test_sensors
+```
+
+# Example Final Plot Showing Interpolated Field and Sensor Locations
+```{r}
+P <- plot_ly(
+
+  # ==========================================================
+  # INTERPOLATED FIELD
+  # ==========================================================
+
+  data = test_field,
+
+  x = ~X_ft,
+  y = ~Y_ft,
+  z = ~Z_ft,
+
+  type = "scatter3d",
+  mode = "markers",
+
+  marker = list(
+
+    size = 10,
+
+    opacity = 0.15,
+
+    symbol = "square",
+
+    color = test_field$Predicted_Temperature_F,
+
+    colorscale = "Viridis",
+
+    colorbar = list(
+      title = list(
+        text = "Temperature (°F)"
+      ),
+      x = 1.12
+    )
+
+  ),
+
+  hoverinfo = "none",
+
+  name = "Estimated Values"
+
+) %>%
+
+  # ==========================================================
+  # SENSOR LOCATIONS
+  # ==========================================================
+
+  add_trace(
+
+    data = sensor_plot_data,
+
+    x = ~X_ft,
+    y = ~Y_ft,
+    z = ~Z_ft,
+
+    type = "scatter3d",
+    mode = "markers",
+
+    marker = list(
+      size = 9,
+      color = "black"
+    ),
+
+    text = ~paste(
+
+      "<b>Sensor:",
+      Sensor_ID,
+      "</b><br>",
+
+      "Length X (ft): ",
+      X_ft,
+      "<br>",
+
+      "Width Y (ft): ",
+      Y_ft,
+      "<br>",
+
+      "Height Z (ft): ",
+      Z_ft,
+      "<br>",
+
+      "Temperature: ",
+      round(Temperature_F, 2),
+      " °F<br>",
+
+      "RH: ",
+      round(Relative_Humidity_pct, 1),
+      " %<br>",
+
+      "Dew Point: ",
+      round(Dew_Point_F, 2),
+      " °F<br>",
+
+      "Dew Point Depression: ",
+      round(Dew_Point_Depression_F, 2),
+      " °F"
+
+    ),
+
+    hoverinfo = "text",
+
+    name = "Sensors",
+
+    inherit = FALSE
+
+  ) %>%
+
+  # ==========================================================
+  # LAYOUT
+  # ==========================================================
+
+  layout(
+
+    scene = list(
+
+      xaxis = list(
+        title = "Width (ft)",
+        range = c(
+          0,
+          room_width
+        )
+      ),
+
+      yaxis = list(
+        title = "Length (ft)",
+        range = c(
+          0,
+          room_length
+        )
+      ),
+
+      zaxis = list(
+        title = "Height (ft)",
+        range = c(
+          0,
+          room_height
+        )
+      ),
+
+      aspectmode = "data"
+
+    ),
+
+    # --------------------------------------------------------
+    # TRACE LEGEND
+    # --------------------------------------------------------
+
+    legend = list(
+
+      x = 0.01,
+
+      y = 0.99,
+
+      xanchor = "left",
+
+      yanchor = "top"
+
+    ),
+
+    title = "3D Environmental Field"
+
+  )
+
+P
+```
+
+## Create a function to interpolate all four variables for a given timestamp
+```{r}
+# ============================================================
+# INTERPOLATE ONE TIMEPOINT
+# ============================================================
+
+interpolate_timepoint <- function(
+
+    timestamp,
+    data,
+    grid,
+    idp = 2
+
+) {
+
+  # ----------------------------------------------------------
+  # Sensor observations for this timestamp
+  # ----------------------------------------------------------
+
+  sensor_data <- data %>%
+
+    filter(
+      Timestamp == timestamp
+    )
+
+
+  # ----------------------------------------------------------
+  # Interpolate temperature
+  # ----------------------------------------------------------
+
+  temperature <- interpolate_variable(
+
+    sensor_data,
+    grid,
+    "Temperature_F",
+    idp
+
+  )
+
+
+  # ----------------------------------------------------------
+  # Interpolate relative humidity
+  # ----------------------------------------------------------
+
+  humidity <- interpolate_variable(
+
+    sensor_data,
+    grid,
+    "Relative_Humidity_pct",
+    idp
+
+  )
+
+
+  # ----------------------------------------------------------
+  # Interpolate dew point
+  # ----------------------------------------------------------
+
+  dew_point <- interpolate_variable(
+
+    sensor_data,
+    grid,
+    "Dew_Point_F",
+    idp
+
+  )
+
+
+  # ----------------------------------------------------------
+  # Interpolate dew point depression
+  # ----------------------------------------------------------
+
+  dpd <- interpolate_variable(
+
+    sensor_data,
+    grid,
+    "Dew_Point_Depression_F",
+    idp
+
+  )
+
+
+  # ----------------------------------------------------------
+  # Combine the four interpolated fields
+  # ----------------------------------------------------------
+
+  result <- temperature %>%
+
+    left_join(
+      humidity,
+      by = c(
+        "X_ft",
+        "Y_ft",
+        "Z_ft"
+      )
+    ) %>%
+
+    left_join(
+      dew_point,
+      by = c(
+        "X_ft",
+        "Y_ft",
+        "Z_ft"
+      )
+    ) %>%
+
+    left_join(
+      dpd,
+      by = c(
+        "X_ft",
+        "Y_ft",
+        "Z_ft"
+      )
+    ) %>%
+
+    mutate(
+      Timestamp = timestamp
+    )
+
+
+  result
+}
+```
+
+## Test the function for a specific timestamp
+```{r}
+test_time <- min(
+  data$Timestamp
+)
+
+test_field <- interpolate_timepoint(
+
+  timestamp = test_time,
+
+  data = data,
+
+  grid = interpolation_grid,
+
+  idp = idw_power
+
+)
+```
+```{r}
+nrow(test_field)
+names(test_field)
+```
+## Interpolate all timestamps in the dataset
+Sort Unique Timepoints
+```{r}
+timepoints <- sort(
+  unique(data$Timestamp)
+)
+
+length(timepoints)
+```
+Interpolate all timepoints
+```{r,results='hide'}
+# ============================================================
+# INTERPOLATE ALL TIMEPOINTS
+# ============================================================
+
+all_interpolated_fields <- lapply(
+
+  timepoints,
+
+  function(t) {
+
+    message(
+      "Processing: ",
+      format(t, "%Y-%m-%d %H:%M")
+    )
+
+    interpolate_timepoint(
+
+      timestamp = t,
+
+      data = data,
+
+      grid = interpolation_grid,
+
+      idp = idw_power
+
+    )
+
+  }
+
+)
+```
+## Combine the Interpolations 
+```{r}
+processed_environmental_fields <- bind_rows(
+  all_interpolated_fields
+)
+
+nrow(processed_environmental_fields)
+```
+```{r}
+table(
+  processed_environmental_fields$Timestamp
+)
+```
+
+# Add metadata to the processed environmental fields
+```{r}
+experiment_id <- "Wifi_Test_July_22"
+```
+
+```{r}
+# ============================================================
+# FINAL PROCESSED DATASET
+# ============================================================
+
+processed_environmental_fields_final <-
+  processed_environmental_fields %>%
+
+  mutate(
+
+    Experiment_ID = experiment_id,
+
+    Grid_Resolution_X_ft = grid_resolution_x,
+
+    Grid_Resolution_Y_ft = grid_resolution_y,
+
+    Grid_Resolution_Z_ft = grid_resolution_z,
+
+    IDW_Power = idw_power
+
+  ) %>%
+
+  select(
+
+    Experiment_ID,
+
+    Timestamp,
+
+    X_ft,
+    Y_ft,
+    Z_ft,
+
+    Predicted_Temperature_F,
+
+    Predicted_Relative_Humidity_pct,
+
+    Predicted_Dew_Point_F,
+
+    Predicted_Dew_Point_Depression_F,
+
+    Grid_Resolution_X_ft,
+    Grid_Resolution_Y_ft,
+    Grid_Resolution_Z_ft,
+
+    IDW_Power
+
+  )
+```
+
+```{r}
+names(processed_environmental_fields_final)
+head(processed_environmental_fields_final)
+```
+
+# Export data as CSV
+## Export Interpolated Data
+```{r}
+# ============================================================
+# EXPORT PROCESSED ENVIRONMENTAL FIELD
+# ============================================================
+
+experiment_id <- "Wifi_Test_July_22nd"
+
+processed_environmental_fields_final <-
+  processed_environmental_fields %>%
+
+  mutate(
+    Experiment_ID = experiment_id,
+
+    Grid_Resolution_X_ft = grid_resolution_x,
+    Grid_Resolution_Y_ft = grid_resolution_y,
+    Grid_Resolution_Z_ft = grid_resolution_z,
+
+    IDW_Power = idw_power
+  ) %>%
+
+  select(
+    Experiment_ID,
+    Timestamp,
+
+    X_ft,
+    Y_ft,
+    Z_ft,
+
+    Predicted_Temperature_F,
+    Predicted_Relative_Humidity_pct,
+    Predicted_Dew_Point_F,
+    Predicted_Dew_Point_Depression_F,
+
+    Grid_Resolution_X_ft,
+    Grid_Resolution_Y_ft,
+    Grid_Resolution_Z_ft,
+
+    IDW_Power
+  )
+
+
+write.csv(
+  processed_environmental_fields_final,
+  "./Processed_Data/Wifi_Test_July_22nd_processed_data.csv",
+  row.names = FALSE
+)
+```
+
+## Export Sensor Data for Visualization
+```{r}
+# ============================================================
+# EXPORT SENSOR DATA
+# ============================================================
+
+processed_sensor_data <-
+  data %>%
+
+  mutate(
+    Experiment_ID = experiment_id
+  ) %>%
+
+  select(
+    Experiment_ID,
+
+    Timestamp,
+
+    Sensor_ID,
+
+    X_ft,
+    Y_ft,
+    Z_ft,
+
+    Temperature_F,
+    Relative_Humidity_pct,
+
+    Dew_Point_F,
+    Dew_Point_Depression_F,
+
+    Bin_ID
+  )
+
+
+write.csv(
+  processed_sensor_data,
+  "./Processed_Data/Wifi_Test_July_22nd_sensor.csv",
+  row.names = FALSE
+)
+```
+

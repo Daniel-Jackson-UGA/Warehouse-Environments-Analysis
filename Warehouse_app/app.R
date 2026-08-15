@@ -41,16 +41,27 @@ sensor_files <- list.files(
   
   path = data_folder,
   
-  pattern = "_sensor\\.csv$",
+  pattern = "_sensor_data\\.csv$",
   
   full.names = TRUE
   
 )
 
 
-# ------------------------------------------------------------
-# Extract experiment names
-# ------------------------------------------------------------
+metadata_files <- list.files(
+  
+  path = data_folder,
+  
+  pattern = "_metadata\\.csv$",
+  
+  full.names = TRUE
+  
+)
+
+
+# ============================================================
+# 3.1 EXTRACT EXPERIMENT NAMES
+# ============================================================
 
 processed_experiments <- sub(
   
@@ -65,7 +76,7 @@ processed_experiments <- sub(
 
 sensor_experiments <- sub(
   
-  "_sensor\\.csv$",
+  "_sensor_data\\.csv$",
   
   "",
   
@@ -74,26 +85,54 @@ sensor_experiments <- sub(
 )
 
 
-# ------------------------------------------------------------
-# Keep only experiments with BOTH files
-# ------------------------------------------------------------
-
-experiment_names <- intersect(
+metadata_experiments <- sub(
   
-  processed_experiments,
+  "_metadata\\.csv$",
   
-  sensor_experiments
+  "",
+  
+  basename(metadata_files)
   
 )
 
 
+# ============================================================
+# 3.2 KEEP ONLY COMPLETE EXPERIMENTS
+# ============================================================
+
+experiment_names <- Reduce(
+  
+  intersect,
+  
+  list(
+    
+    processed_experiments,
+    
+    sensor_experiments,
+    
+    metadata_experiments
+    
+  )
+  
+)
+
+
+# ============================================================
+# 3.3 VERIFY EXPERIMENTS
+# ============================================================
+
 if (length(experiment_names) == 0) {
   
   stop(
+    
     paste(
-      "No complete processed/sensor CSV pairs were found in:",
+      
+      "No complete experiment file sets were found in:",
+      
       data_folder
+      
     )
+    
   )
   
 }
@@ -216,7 +255,7 @@ sensor_data_list <- lapply(
       
       paste0(
         experiment,
-        "_sensor.csv"
+        "_sensor_data.csv"
       )
       
     )
@@ -248,6 +287,80 @@ sensor_data_list <- lapply(
 names(sensor_data_list) <-
   experiment_names
 
+
+# ============================================================
+# 6.1 LOAD ALL EXPERIMENT METADATA
+# ============================================================
+
+metadata_list <- lapply(
+  
+  experiment_names,
+  
+  function(experiment) {
+    
+    file <- file.path(
+      
+      data_folder,
+      
+      paste0(
+        
+        experiment,
+        
+        "_metadata.csv"
+        
+      )
+      
+    )
+    
+    
+    metadata <- read.csv(
+      
+      file,
+      
+      stringsAsFactors = FALSE
+      
+    )
+    
+    
+    metadata
+    
+  }
+  
+)
+
+
+names(metadata_list) <-
+  experiment_names
+
+# ============================================================
+# 6.2 METADATA HELPER FUNCTION
+# ============================================================
+
+get_metadata_value <- function(
+    
+  metadata,
+  
+  parameter
+  
+) {
+  
+  value <-
+    
+    metadata$Value[
+      metadata$Parameter == parameter
+    ]
+  
+  
+  if (length(value) == 0) {
+    
+    return(NA)
+    
+  }
+  
+  
+  value[[1]]
+  
+}
 
 # ============================================================
 # 7. CHECK DATA
@@ -443,49 +556,83 @@ experiment_tabs <- lapply(
           
           
           # --------------------------------------------------
-          # Time slider
+          # TIME SLIDER + PLAY BUTTON
           # --------------------------------------------------
           
-          sliderInput(
+          fluidRow(
             
-            inputId =
-              time_id,
+            column(
+              
+              width = 10,
+              
+              sliderInput(
+                
+                inputId =
+                  time_id,
+                
+                label =
+                  NULL,
+                
+                min =
+                  1,
+                
+                max =
+                  length(
+                    timepoints_list[[experiment]]
+                  ),
+                
+                value =
+                  1,
+                
+                step =
+                  1,
+                
+                ticks =
+                  TRUE,
+                
+                width =
+                  "100%"
+                
+              )
+              
+            ),
             
-            label =
-              NULL,
-            
-            min =
-              1,
-            
-            max =
-              length(
-                timepoints_list[[experiment]]
-              ),
-            
-            value =
-              1,
-            
-            step =
-              1,
-            
-            ticks =
-              TRUE,
-            
-            width =
-              "100%"
+            column(
+              
+              width = 2,
+              
+              actionButton(
+                
+                inputId =
+                  paste0(
+                    "play_",
+                    id
+                  ),
+                
+                label =
+                  "▶ Play",
+                
+                class =
+                  "btn-primary",
+                
+                width =
+                  "100%"
+                
+              )
+              
+            )
             
           )
           
-        )
+        )  # mainPanel
         
-      )
+      )    # sidebarLayout
       
-    )
+    )      # tabPanel
     
   }
   
 )
-
 
 # ============================================================
 # 10.4 MAIN UI
@@ -618,7 +765,7 @@ server <- function(
 ) {
   
   
-  ## ============================================================
+  # ============================================================
   # 11.1 CREATE OUTPUTS FOR EACH EXPERIMENT
   # ============================================================
   
@@ -669,6 +816,13 @@ server <- function(
           )
         
         
+        play_id <-
+          paste0(
+            "play_",
+            current_id
+          )
+        
+        
         # ============================================================
         # DATA
         # ============================================================
@@ -681,9 +835,126 @@ server <- function(
           sensor_data_list[[current_experiment]]
         
         
+        current_metadata <-
+          metadata_list[[current_experiment]]
+        
+        
         current_timepoints <-
           timepoints_list[[current_experiment]]
         
+        
+        # ============================================================
+        # PLAY / PAUSE STATE
+        # ============================================================
+        
+        playing <-
+          reactiveVal(FALSE)
+        
+        
+        # ============================================================
+        # PLAY / PAUSE BUTTON
+        # ============================================================
+        
+        observeEvent(
+          
+          input[[play_id]],
+          
+          {
+            
+            playing(
+              !playing()
+            )
+            
+          }
+          
+        )
+        
+        
+        # ============================================================
+        # ADVANCE TIMEPOINT
+        # ============================================================
+        
+        observe({
+          
+          req(
+            playing()
+          )
+          
+          invalidateLater(
+            750
+          )
+          
+          
+          current_position <-
+            input[[time_id]]
+          
+          
+          if (
+            
+            current_position <
+            length(current_timepoints)
+            
+          ) {
+            
+            updateSliderInput(
+              
+              session,
+              
+              time_id,
+              
+              value =
+                current_position + 1
+              
+            )
+            
+          } else {
+            
+            playing(
+              FALSE
+            )
+            
+          }
+          
+        })
+        
+        
+        # ============================================================
+        # UPDATE PLAY / PAUSE BUTTON TEXT
+        # ============================================================
+        
+        observe({
+          
+          if (
+            playing()
+          ) {
+            
+            updateActionButton(
+              
+              session,
+              
+              play_id,
+              
+              label =
+                "⏸ Pause"
+              
+            )
+            
+          } else {
+            
+            updateActionButton(
+              
+              session,
+              
+              play_id,
+              
+              label =
+                "▶ Play"
+              
+            )
+            
+          }
+          
+        })
         
         # ====================================================
         # 11.2 DISPLAY SELECTED TIME
@@ -832,92 +1103,300 @@ server <- function(
               )
             
             
-            # ==================================================
-            # 11.9 ROOM DIMENSIONS
-            # ==================================================
-            
-            # Current coordinate system:
-            #
-            # X = Width
-            # Y = Length
-            # Z = Height
-            #
-            # Origin = back-left-floor
-            
+            # ============================================================
+            # 11.9 ROOM DIMENSIONS FROM METADATA
+            # ============================================================
             
             room_width <-
               
-              max(
+              as.numeric(
                 
-                c(
-                  field_data$X_ft,
-                  sensor_plot_data$X_ft
-                ),
-                
-                na.rm = TRUE
+                get_metadata_value(
+                  
+                  current_metadata,
+                  
+                  "Room_Width_ft"
+                  
+                )
                 
               )
             
             
             room_length <-
               
-              max(
+              as.numeric(
                 
-                c(
-                  field_data$Y_ft,
-                  sensor_plot_data$Y_ft
-                ),
-                
-                na.rm = TRUE
+                get_metadata_value(
+                  
+                  current_metadata,
+                  
+                  "Room_Length_ft"
+                  
+                )
                 
               )
             
             
             room_height <-
               
-              max(
+              as.numeric(
                 
-                c(
-                  field_data$Z_ft,
-                  sensor_plot_data$Z_ft
-                ),
-                
-                na.rm = TRUE
+                get_metadata_value(
+                  
+                  current_metadata,
+                  
+                  "Room_Height_ft"
+                  
+                )
                 
               )
             
             
-            # ==================================================
-            # 11.10 DOOR DIMENSIONS
-            # ==================================================
+            # ============================================================
+            # 11.10 DOOR DIMENSIONS FROM METADATA
+            # ============================================================
+            
+            door_wall <-
+              
+              get_metadata_value(
+                
+                current_metadata,
+                
+                "Door_Wall"
+                
+              )
+            
             
             door_width <-
-              min(
-                7,
-                room_width
+              
+              as.numeric(
+                
+                get_metadata_value(
+                  
+                  current_metadata,
+                  
+                  "Door_Width_ft"
+                  
+                )
+                
               )
             
             
             door_height <-
-              min(
-                8,
-                room_height
+              
+              as.numeric(
+                
+                get_metadata_value(
+                  
+                  current_metadata,
+                  
+                  "Door_Height_ft"
+                  
+                )
+                
               )
             
             
-            door_center_x <-
-              room_width / 2
+            door_center <-
+              
+              as.numeric(
+                
+                get_metadata_value(
+                  
+                  current_metadata,
+                  
+                  "Door_Center_ft"
+                  
+                )
+                
+              )
+            
+            # ============================================================
+            # 11.11 CREATE DOOR GEOMETRY
+            # ============================================================
+            
+            if (
+              
+              door_wall %in%
+              c("back", "front")
+              
+            ) {
+              
+              # ----------------------------------------------------------
+              # Door is on front/back wall
+              # Door center is an X coordinate
+              # ----------------------------------------------------------
+              
+              door_x1 <-
+                door_center -
+                door_width / 2
+              
+              
+              door_x2 <-
+                door_center +
+                door_width / 2
+              
+              
+              door_y <-
+                
+                if (
+                  
+                  door_wall == "front"
+                  
+                ) {
+                  
+                  room_length
+                  
+                } else {
+                  
+                  0
+                  
+                }
+              
+              
+              door_x <-
+                c(
+                  
+                  door_x1,
+                  door_x2,
+                  NA,
+                  
+                  door_x1,
+                  door_x1,
+                  NA,
+                  
+                  door_x2,
+                  door_x2
+                  
+                )
+              
+              
+              door_y_values <-
+                c(
+                  
+                  door_y,
+                  door_y,
+                  NA,
+                  
+                  door_y,
+                  door_y,
+                  NA,
+                  
+                  door_y,
+                  door_y
+                  
+                )
+              
+              
+              door_z <-
+                c(
+                  
+                  0,
+                  0,
+                  NA,
+                  
+                  0,
+                  door_height,
+                  NA,
+                  
+                  0,
+                  door_height
+                  
+                )
+              
+            }
             
             
-            door_x1 <-
-              door_center_x -
-              door_width / 2
-            
-            
-            door_x2 <-
-              door_center_x +
-              door_width / 2
-            
+            if (
+              
+              door_wall %in%
+              c("left", "right")
+              
+            ) {
+              
+              # ----------------------------------------------------------
+              # Door is on left/right wall
+              # Door center is a Y coordinate
+              # ----------------------------------------------------------
+              
+              door_y1 <-
+                door_center -
+                door_width / 2
+              
+              
+              door_y2 <-
+                door_center +
+                door_width / 2
+              
+              
+              door_x_value <-
+                
+                if (
+                  
+                  door_wall == "right"
+                  
+                ) {
+                  
+                  room_width
+                  
+                } else {
+                  
+                  0
+                  
+                }
+              
+              
+              door_x <-
+                c(
+                  
+                  door_x_value,
+                  door_x_value,
+                  NA,
+                  
+                  door_x_value,
+                  door_x_value,
+                  NA,
+                  
+                  door_x_value,
+                  door_x_value
+                  
+                )
+              
+              
+              door_y_values <-
+                c(
+                  
+                  door_y1,
+                  door_y2,
+                  NA,
+                  
+                  door_y1,
+                  door_y1,
+                  NA,
+                  
+                  door_y2,
+                  door_y2
+                  
+                )
+              
+              
+              door_z <-
+                c(
+                  
+                  0,
+                  0,
+                  NA,
+                  
+                  0,
+                  door_height,
+                  NA,
+                  
+                  0,
+                  door_height
+                  
+                )
+              
+            }
             
             # ============================================================
             # 11.11 FIELD VALUES
@@ -1103,9 +1582,9 @@ server <- function(
             ) %>%
               
               
-              # ==================================================
+              # ============================================================
             # 11.15 ROOM DOOR
-            # ==================================================
+            # ============================================================
             
             add_trace(
               
@@ -1115,50 +1594,14 @@ server <- function(
               mode =
                 "lines",
               
-              x = c(
-                
-                door_x1,
-                door_x2,
-                NA,
-                
-                door_x1,
-                door_x1,
-                NA,
-                
-                door_x2,
-                door_x2
-                
-              ),
+              x =
+                door_x,
               
-              y = c(
-                
-                0,
-                0,
-                NA,
-                
-                0,
-                0,
-                NA,
-                
-                0,
-                0
-                
-              ),
+              y =
+                door_y_values,
               
-              z = c(
-                
-                0,
-                0,
-                NA,
-                
-                0,
-                door_height,
-                NA,
-                
-                0,
-                door_height
-                
-              ),
+              z =
+                door_z,
               
               line = list(
                 
@@ -1180,7 +1623,6 @@ server <- function(
                 FALSE
               
             ) %>%
-              
               
               # ==================================================
             # 11.16 FORMAT PLOT

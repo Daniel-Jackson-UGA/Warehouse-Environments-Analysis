@@ -5,7 +5,208 @@ date: "2026-08-12"
 ---
 This notebook is designed to analyze environmental data collected from a warehouse. The analysis will include data cleaning, visualization, and statistical modeling to understand the environmental conditions within the warehouse.
 
-# Setup 
+# Experiment Configuration
+```{r}
+# -------------
+# DEFINE EXPERIMENT NAME
+# ---------------
+
+experiment_name <- "Penetration_Test"
+
+```
+This should match the name of the data file (without the .xlsx extension) in the Data folder. For example, if the data file is named "Experiment.xlsx", then experiment_name should be set to "Experiment".
+
+## Set Folder Directory 
+```{r}
+input_folder <-
+  "C:/Users/Daniel Jackson/Desktop/R/Warehouse Environments Analysis/Data"
+
+processed_folder <-
+  "C:/Users/Daniel Jackson/Desktop/R/Warehouse Environments Analysis/Processed_Data"
+
+```
+
+## Set Room Dimensions
+```{r}
+# Coordinate system:
+#
+# Origin = back-left-floor
+#
+# X = Width
+# X increases from left -> right
+#
+# Y = Length
+# Y increases from back -> front
+#
+# Z = Height
+# Z increases from floor -> ceiling
+
+room_width_ft  <- 25 # ft
+
+room_length_ft <- 35 # ft
+
+room_height_ft <- 30 # ft
+
+room <- list(
+  width = room_width_ft,
+  length = room_length_ft,
+  height = room_height_ft
+)
+
+room
+```
+
+## Door Configuration
+```{r}
+# Door wall:
+#
+# "back"
+# "front"
+# "left"
+# "right"
+
+
+door_wall <- "front"
+
+
+door_width_ft <- 12
+
+door_height_ft <- 14
+
+
+# Position of CENTER of door
+#
+# Back/front wall:
+#   position is X / Width
+#
+# Left/right wall:
+#   position is Y / Length
+
+
+door_center_ft <-
+  room_width_ft - 8   #This sets the center of the door to 8 ft from the total room length. Adjust as needed. 
+```
+
+## Spatial Resolution for Interpolation
+```{r}
+grid_resolution_x <- 2 #ft 
+
+grid_resolution_y <- 2 #ft 
+
+grid_resolution_z <- 2 #ft 
+
+# This sets the spatial resolution for the interpolation grid. Adjust as needed for finer or coarser resolution.
+```
+
+## IDW Interpolation Power Parameter
+```{r}
+idw_power <- 2
+```
+
+## Define Output Files 
+```{r}
+processed_output_file <-
+  file.path(
+
+    processed_folder,
+
+    paste0(
+      experiment_name,
+      "_processed_data.csv"
+    )
+
+  )
+
+
+sensor_output_file <-
+  file.path(
+
+    processed_folder,
+
+    paste0(
+      experiment_name,
+      "_sensor_data.csv"
+    )
+
+  )
+
+
+metadata_output_file <-
+  file.path(
+
+    processed_folder,
+
+    paste0(
+      experiment_name,
+      "_metadata.csv"
+    )
+
+  )
+```
+
+## Create Metadata
+```{r}
+metadata <- data.frame(
+
+  Parameter = c(
+
+    "Experiment_Name",
+
+    "Room_Width_ft",
+    "Room_Length_ft",
+    "Room_Height_ft",
+
+    "Coordinate_X",
+    "Coordinate_Y",
+    "Coordinate_Z",
+
+    "Origin",
+
+    "Door_Wall",
+    "Door_Width_ft",
+    "Door_Height_ft",
+    "Door_Center_ft",
+
+    "Grid_Resolution_X_ft",
+    "Grid_Resolution_Y_ft",
+    "Grid_Resolution_Z_ft",
+
+    "IDW_Power"
+
+  ),
+
+  Value = c(
+
+    experiment_name,
+
+    room_width_ft,
+    room_length_ft,
+    room_height_ft,
+
+    "Width",
+    "Length",
+    "Height",
+
+    "Back-left-floor",
+
+    door_wall,
+    door_width_ft,
+    door_height_ft,
+    door_center_ft,
+
+    grid_resolution_x,
+    grid_resolution_y,
+    grid_resolution_z,
+
+    idw_power
+
+  ),
+
+  stringsAsFactors = FALSE
+
+)
+```
+
 
 ## Load Packages 
 ```{r}
@@ -22,19 +223,71 @@ library(viridisLite)
 
 ## Import Excel data
 ```{r}
-setwd("C:/Users/Daniel Jackson/Desktop/R/Warehouse Environments Analysis/")
+i# ============================================================
+# 4. IMPORT EXPERIMENT DATA
+# ============================================================
+
+# ------------------------------------------------------------
+# Define input file automatically from experiment name
+# ------------------------------------------------------------
+
+input_file <-
+  file.path(
+
+    input_folder,
+
+    paste0(
+      experiment_name,
+      ".xlsx"
+    )
+
+  )
 
 
-# Import Excel data
-data <- read_excel("./Data/Wifi_Test_B_Farms.xlsx")
+# ------------------------------------------------------------
+# Check that input file exists
+# ------------------------------------------------------------
 
-# Look at the first rows
-head(data)
+if (!file.exists(input_file)) {
+
+  stop(
+
+    paste0(
+
+      "Input file not found:\n",
+
+      input_file
+
+    )
+
+  )
+
+}
+
+
+# ------------------------------------------------------------
+# Read Excel data
+# ------------------------------------------------------------
+
+raw_data <-
+  read_excel(
+
+    input_file
+
+  )
+
+
+# ------------------------------------------------------------
+# Display first rows
+# ------------------------------------------------------------
+
+head(raw_data)
+
 ```
 
 ## Convert the timestamp
 ```{r}
-data <- data %>%
+data <- raw_data %>%
   mutate(
     Timestamp = as.POSIXct(
       Timestamp,
@@ -46,45 +299,53 @@ data <- data %>%
 head(data$Timestamp)
 ```
 
-# Define the room dimensions
-
-For now, let's use the dimensions represented by our sample dataset:
+##VALIDATE SENSOR COORDINATES
 ```{r}
-# ============================================================
-# DEFINE ROOM DIMENSIONS
-# ============================================================
+coordinate_errors <- data %>%
 
-# Coordinate system:
-#
-# Origin (0, 0, 0) = back-left-floor
-#
-# X = Width
-# X increases from left → right
-# Total width = 25 ft
-#
-# Y = Length
-# Y increases from back → front
-# Total length = 35 ft
-#
-# Z = Height
-# Z increases from floor → ceiling
-# Total height = 30 ft
+  filter(
 
-room_width  <- 25
-room_length <- 35
-room_height <- 30
+    X_ft < 0 |
+    X_ft > room_width_ft |
+
+    Y_ft < 0 |
+    Y_ft > room_length_ft |
+
+    Z_ft< 0 |
+    Z_ft > room_height_ft
+
+  )
 
 
-room <- list(
-  width = room_width,
-  length = room_length,
-  height = room_height
-)
+if (nrow(coordinate_errors) > 0) {
 
-room
+  stop(
+
+    paste0(
+
+      "Sensor coordinates fall outside the defined room dimensions.\n",
+
+      "Room dimensions: ",
+
+      room_width_ft,
+      " ft × ",
+
+      room_length_ft,
+      " ft × ",
+
+      room_height_ft,
+      " ft.\n",
+
+      "Number of invalid observations: ",
+
+      nrow(coordinate_errors)
+
+    )
+
+  )
+
+}
 ```
-
-
 
 ## Create the room boundaries
 ```{r}
@@ -96,24 +357,24 @@ corners <- data.frame(
 
   X = c(
     0,
-    room_width,
-    room_width,
+    room_width_ft,
+    room_width_ft,
     0,
     0,
-    room_width,
-    room_width,
+    room_width_ft,
+    room_width_ft,
     0
   ),
 
   Y = c(
     0,
     0,
-    room_length,
-    room_length,
+    room_length_ft,
+    room_length_ft,
     0,
     0,
-    room_length,
-    room_length
+    room_length_ft,
+    room_length_ft
   ),
 
   Z = c(
@@ -121,10 +382,10 @@ corners <- data.frame(
     0,
     0,
     0,
-    room_height,
-    room_height,
-    room_height,
-    room_height
+    room_height_ft,
+    room_height_ft,
+    room_height_ft,
+    room_height_ft
   )
 
 )
@@ -224,6 +485,7 @@ rownames(room_edges) <- NULL
 
 head(room_edges, 15)
 ```
+
 ## Plot the room
 ```{r}
 plot_ly(
@@ -250,17 +512,17 @@ plot_ly(
 
       xaxis = list(
   title = "Width (ft)",
-  range = c(0, room_width)
+  range = c(0, room_width_ft)
 ),
 
 yaxis = list(
   title = "Length (ft)",
-  range = c(0, room_length)
+  range = c(0, room_length_ft)
 ),
 
 zaxis = list(
   title = "Height (ft)",
-  range = c(0, room_height)
+  range = c(0, room_height_ft)
 ),
 
       aspectmode = "data"
@@ -314,13 +576,13 @@ sensor_check <- data %>%
 
     Inside_Room =
       X_ft >= 0 &
-      X_ft <= room_width &
+      X_ft <= room_width_ft &
 
       Y_ft >= 0 &
-      Y_ft <= room_length &
+      Y_ft <= room_length_ft &
 
       Z_ft >= 0 &
-      Z_ft <= room_height
+      Z_ft <= room_height_ft
 
   )
 
@@ -414,7 +676,7 @@ P <- plot_ly(
         title = "Width (ft)",
         range = c(
           0,
-          room_width
+          room_width_ft
         )
       ),
 
@@ -423,7 +685,7 @@ P <- plot_ly(
         title = "Length (ft)",
         range = c(
           0,
-          room_length
+          room_length_ft
         )
       ),
 
@@ -432,7 +694,7 @@ P <- plot_ly(
         title = "Height (ft)",
         range = c(
           0,
-          room_height
+          room_height_ft
         )
       ),
 
@@ -505,34 +767,25 @@ names(data)
 ```
 # Interpolation
 
-## Set Grid Resolution 
-```{r}
-grid_resolution_x <- 2  # ft
-grid_resolution_y <- 2   # ft
-grid_resolution_z <- 2  # ft
-
-idw_power <- 2
-```
-
 ## Create a grid for interpolation
 ```{r}
 interpolation_grid <- expand.grid(
 
   X_ft = seq(
     0,
-    room_width,
+    room_width_ft,
     by = grid_resolution_x
   ),
 
   Y_ft = seq(
     0,
-    room_length,
+    room_length_ft,
     by = grid_resolution_y
   ),
 
   Z_ft = seq(
     0,
-    room_height,
+    room_height_ft,
     by = grid_resolution_z
   )
 
@@ -550,7 +803,7 @@ interpolate_variable <- function(
     sensor_data,
     grid,
     variable,
-    idp = 2
+    idp = idp
 ) {
 
   # ----------------------------------------------------------
@@ -782,7 +1035,7 @@ plot_ly(
         title = "Width X (ft)",
         range = c(
           0,
-          room_width
+          room_width_ft
         )
       ),
 
@@ -790,7 +1043,7 @@ plot_ly(
         title = "Length Y (ft)",
         range = c(
           0,
-          room_length
+          room_length_ft
         )
       ),
 
@@ -798,7 +1051,7 @@ plot_ly(
         title = "Height Z (ft)",
         range = c(
           0,
-          room_height
+          room_height_ft
         )
       ),
 
@@ -946,7 +1199,7 @@ P <- plot_ly(
         title = "Width (ft)",
         range = c(
           0,
-          room_width
+          room_width_ft
         )
       ),
 
@@ -954,7 +1207,7 @@ P <- plot_ly(
         title = "Length (ft)",
         range = c(
           0,
-          room_length
+          room_length_ft
         )
       ),
 
@@ -962,7 +1215,7 @@ P <- plot_ly(
         title = "Height (ft)",
         range = c(
           0,
-          room_height
+          room_height_ft
         )
       ),
 
@@ -1189,6 +1442,7 @@ processed_environmental_fields <- bind_rows(
 
 nrow(processed_environmental_fields)
 ```
+
 ```{r}
 table(
   processed_environmental_fields$Timestamp
@@ -1196,9 +1450,6 @@ table(
 ```
 
 # Add metadata to the processed environmental fields
-```{r}
-experiment_id <- "Wifi_Test_July_22"
-```
 
 ```{r}
 # ============================================================
@@ -1210,7 +1461,7 @@ processed_environmental_fields_final <-
 
   mutate(
 
-    Experiment_ID = experiment_id,
+    Experiment_ID = experiment_name,
 
     Grid_Resolution_X_ft = grid_resolution_x,
 
@@ -1261,13 +1512,11 @@ head(processed_environmental_fields_final)
 # EXPORT PROCESSED ENVIRONMENTAL FIELD
 # ============================================================
 
-experiment_id <- "Wifi_Test_July_22nd"
-
 processed_environmental_fields_final <-
   processed_environmental_fields %>%
 
   mutate(
-    Experiment_ID = experiment_id,
+    Experiment_ID = experiment_name,
 
     Grid_Resolution_X_ft = grid_resolution_x,
     Grid_Resolution_Y_ft = grid_resolution_y,
@@ -1296,13 +1545,25 @@ processed_environmental_fields_final <-
     IDW_Power
   )
 
+```
+
+```{r}
+# ============================================================
+# EXPORT PROCESSED ENVIRONMENTAL DATA
+# ============================================================
 
 write.csv(
+
   processed_environmental_fields_final,
-  "./Processed_Data/Wifi_Test_July_22nd_processed_data.csv",
+
+  processed_output_file,
+
   row.names = FALSE
+
 )
 ```
+
+
 
 ## Export Sensor Data for Visualization
 ```{r}
@@ -1314,10 +1575,14 @@ processed_sensor_data <-
   data %>%
 
   mutate(
-    Experiment_ID = experiment_id
+
+    Experiment_ID =
+      experiment_name
+
   ) %>%
 
   select(
+
     Experiment_ID,
 
     Timestamp,
@@ -1329,19 +1594,43 @@ processed_sensor_data <-
     Z_ft,
 
     Temperature_F,
+
     Relative_Humidity_pct,
 
     Dew_Point_F,
+
     Dew_Point_Depression_F,
 
     Bin_ID
+
   )
 
 
 write.csv(
+
   processed_sensor_data,
-  "./Processed_Data/Wifi_Test_July_22nd_sensor.csv",
+
+  sensor_output_file,
+
   row.names = FALSE
+
+)
+```
+
+## Export Metadata
+```{r}
+# ============================================================
+# EXPORT EXPERIMENT METADATA
+# ============================================================
+
+write.csv(
+
+  metadata,
+
+  metadata_output_file,
+
+  row.names = FALSE
+
 )
 ```
 

@@ -784,6 +784,7 @@ server <- function(
         current_id <-
           experiment_ids[[current_experiment]]
         
+        
         # ====================================================
         # INPUT IDs
         # ====================================================
@@ -823,9 +824,9 @@ server <- function(
           )
         
         
-        # ============================================================
+        # ====================================================
         # DATA
-        # ============================================================
+        # ====================================================
         
         current_processed_data <-
           processed_data_list[[current_experiment]]
@@ -843,17 +844,17 @@ server <- function(
           timepoints_list[[current_experiment]]
         
         
-        # ============================================================
-        # PLAY / PAUSE STATE
-        # ============================================================
+        # ====================================================
+        # 11.1.1 PLAY / PAUSE STATE
+        # ====================================================
         
         playing <-
           reactiveVal(FALSE)
         
         
-        # ============================================================
-        # PLAY / PAUSE BUTTON
-        # ============================================================
+        # ====================================================
+        # 11.1.2 PLAY / PAUSE BUTTON
+        # ====================================================
         
         observeEvent(
           
@@ -870,15 +871,16 @@ server <- function(
         )
         
         
-        # ============================================================
-        # ADVANCE TIMEPOINT
-        # ============================================================
+        # ====================================================
+        # 11.1.3 ADVANCE TIMEPOINT
+        # ====================================================
         
         observe({
           
           req(
             playing()
           )
+          
           
           invalidateLater(
             750
@@ -918,9 +920,9 @@ server <- function(
         })
         
         
-        # ============================================================
-        # UPDATE PLAY / PAUSE BUTTON TEXT
-        # ============================================================
+        # ====================================================
+        # 11.1.4 UPDATE PLAY / PAUSE BUTTON TEXT
+        # ====================================================
         
         observe({
           
@@ -956,6 +958,7 @@ server <- function(
           
         })
         
+        
         # ====================================================
         # 11.2 DISPLAY SELECTED TIME
         # ====================================================
@@ -969,6 +972,7 @@ server <- function(
             
             
             selected_time <-
+              
               current_timepoints[
                 input[[time_id]]
               ]
@@ -991,17 +995,755 @@ server <- function(
           })
         
         
-        # ====================================================
-        # 11.3 RENDER ENVIRONMENTAL PLOT
-        # ====================================================
+        # ============================================================
+        # 11.3 ROOM DIMENSIONS FROM METADATA
+        # ============================================================
+        
+        room_width <-
+          
+          as.numeric(
+            
+            get_metadata_value(
+              
+              current_metadata,
+              
+              "Room_Width_ft"
+              
+            )
+            
+          )
+        
+        
+        room_length <-
+          
+          as.numeric(
+            
+            get_metadata_value(
+              
+              current_metadata,
+              
+              "Room_Length_ft"
+              
+            )
+            
+          )
+        
+        
+        room_height <-
+          
+          as.numeric(
+            
+            get_metadata_value(
+              
+              current_metadata,
+              
+              "Room_Height_ft"
+              
+            )
+            
+          )
+        
+        
+        # ============================================================
+        # 11.4 DOOR DIMENSIONS FROM METADATA
+        # ============================================================
+        
+        door_wall <-
+          
+          get_metadata_value(
+            
+            current_metadata,
+            
+            "Door_Wall"
+            
+          )
+        
+        
+        door_width <-
+          
+          as.numeric(
+            
+            get_metadata_value(
+              
+              current_metadata,
+              
+              "Door_Width_ft"
+              
+            )
+            
+          )
+        
+        
+        door_height <-
+          
+          as.numeric(
+            
+            get_metadata_value(
+              
+              current_metadata,
+              
+              "Door_Height_ft"
+              
+            )
+            
+          )
+        
+        
+        door_center <-
+          
+          as.numeric(
+            
+            get_metadata_value(
+              
+              current_metadata,
+              
+              "Door_Center_ft"
+              
+            )
+            
+          )
+        
+        
+        # ============================================================
+        # 11.5 CREATE DOOR GEOMETRY
+        # ============================================================
+        
+        if (
+          
+          door_wall %in%
+          c("back", "front")
+          
+        ) {
+          
+          
+          door_x1 <-
+            door_center -
+            door_width / 2
+          
+          
+          door_x2 <-
+            door_center +
+            door_width / 2
+          
+          
+          door_y <-
+            
+            if (
+              
+              door_wall == "front"
+              
+            ) {
+              
+              room_length
+              
+            } else {
+              
+              0
+              
+            }
+          
+          
+          door_x <-
+            c(
+              
+              door_x1,
+              door_x2,
+              NA,
+              
+              door_x1,
+              door_x1,
+              NA,
+              
+              door_x2,
+              door_x2
+              
+            )
+          
+          
+          door_y_values <-
+            c(
+              
+              door_y,
+              door_y,
+              NA,
+              
+              door_y,
+              door_y,
+              NA,
+              
+              door_y,
+              door_y
+              
+            )
+          
+          
+          door_z <-
+            c(
+              
+              0,
+              0,
+              NA,
+              
+              0,
+              door_height,
+              NA,
+              
+              0,
+              door_height
+              
+            )
+          
+        }
+        
+        
+        if (
+          
+          door_wall %in%
+          c("left", "right")
+          
+        ) {
+          
+          
+          door_y1 <-
+            door_center -
+            door_width / 2
+          
+          
+          door_y2 <-
+            door_center +
+            door_width / 2
+          
+          
+          door_x_value <-
+            
+            if (
+              
+              door_wall == "right"
+              
+            ) {
+              
+              room_width
+              
+            } else {
+              
+              0
+              
+            }
+          
+          
+          door_x <-
+            c(
+              
+              door_x_value,
+              door_x_value,
+              NA,
+              
+              door_x_value,
+              door_x_value,
+              NA,
+              
+              door_x_value,
+              door_x_value
+              
+            )
+          
+          
+          door_y_values <-
+            c(
+              
+              door_y1,
+              door_y2,
+              NA,
+              
+              door_y1,
+              door_y1,
+              NA,
+              
+              door_y2,
+              door_y2
+              
+            )
+          
+          
+          door_z <-
+            c(
+              
+              0,
+              0,
+              NA,
+              
+              0,
+              door_height,
+              NA,
+              
+              0,
+              door_height
+              
+            )
+          
+        }
+        
+        
+        # ============================================================
+        # 11.6 INITIAL TIMEPOINT
+        # ============================================================
+        
+        initial_time <-
+          current_timepoints[1]
+        
+        
+        initial_variable <-
+          "Predicted_Temperature_F"
+        
+        
+        # ============================================================
+        # 11.7 INITIAL ENVIRONMENTAL FIELD
+        # ============================================================
+        
+        initial_field_data <-
+          
+          current_processed_data %>%
+          
+          filter(
+            
+            Timestamp ==
+              initial_time
+            
+          )
+        
+        
+        # ============================================================
+        # 11.8 INITIAL SENSOR DATA
+        # ============================================================
+        
+        initial_sensor_data <-
+          
+          current_sensor_data %>%
+          
+          filter(
+            
+            Timestamp ==
+              initial_time
+            
+          )
+        
+        
+        # ============================================================
+        # 11.9 VERIFY INITIAL DATA
+        # ============================================================
+        
+        req(
+          
+          nrow(
+            initial_field_data
+          ) > 0
+          
+        )
+        
+        
+        req(
+          
+          nrow(
+            initial_sensor_data
+          ) > 0
+          
+        )
+        
+        
+        # ============================================================
+        # 11.10 INITIAL FIELD VALUES
+        # ============================================================
+        
+        initial_field_values <-
+          initial_field_data[[initial_variable]]
+        
+        
+        # ============================================================
+        # 11.11 INITIAL SENSOR HOVER TEXT
+        # ============================================================
+        
+        initial_sensor_text <- paste(
+          
+          "<b>Sensor:",
+          initial_sensor_data$Sensor_ID,
+          "</b><br>",
+          
+          "Width X (ft): ",
+          initial_sensor_data$X_ft,
+          "<br>",
+          
+          "Length Y (ft): ",
+          initial_sensor_data$Y_ft,
+          "<br>",
+          
+          "Height Z (ft): ",
+          initial_sensor_data$Z_ft,
+          "<br>",
+          
+          "Temperature: ",
+          
+          round(
+            initial_sensor_data$Temperature_F,
+            2
+          ),
+          
+          " °F<br>",
+          
+          "RH: ",
+          
+          round(
+            initial_sensor_data$Relative_Humidity_pct,
+            1
+          ),
+          
+          " %<br>",
+          
+          "Dew Point: ",
+          
+          round(
+            initial_sensor_data$Dew_Point_F,
+            2
+          ),
+          
+          " °F<br>",
+          
+          "Dew Point Depression: ",
+          
+          round(
+            initial_sensor_data$Dew_Point_Depression_F,
+            2
+          ),
+          
+          " °F"
+          
+        )
+        
+        
+        # ============================================================
+        # 11.12 INITIAL VARIABLE LABEL
+        # ============================================================
+        
+        initial_variable_label <-
+          
+          "Temperature (°F)"
+        
+        
+        # ============================================================
+        # 11.13 CREATE INITIAL PLOT
+        # ============================================================
         
         output[[plot_id]] <-
+          
           renderPlotly({
             
+            P <-
+              
+              plot_ly(
+                
+                data =
+                  initial_field_data,
+                
+                source =
+                  plot_id,
+                
+                x =
+                  ~X_ft,
+                
+                y =
+                  ~Y_ft,
+                
+                z =
+                  ~Z_ft,
+                
+                type =
+                  "scatter3d",
+                
+                mode =
+                  "markers",
+                
+                marker = list(
+                  
+                  size =
+                    10,
+                  
+                  opacity =
+                    0.15,
+                  
+                  symbol =
+                    "square",
+                  
+                  color =
+                    initial_field_values,
+                  
+                  colorscale =
+                    "Viridis",
+                  
+                  colorbar = list(
+                    
+                    title = list(
+                      
+                      text =
+                        initial_variable_label
+                      
+                    ),
+                    
+                    x =
+                      1.12
+                    
+                  )
+                  
+                ),
+                
+                hoverinfo =
+                  "none",
+                
+                name =
+                  "Estimated Values"
+                
+              ) %>%
+              
+              
+              # ======================================================
+            # SENSOR LOCATIONS
+            # ======================================================
             
-            # ==================================================
-            # 11.4 GET USER SELECTIONS
-            # ==================================================
+            add_trace(
+              
+              data =
+                initial_sensor_data,
+              
+              x =
+                ~X_ft,
+              
+              y =
+                ~Y_ft,
+              
+              z =
+                ~Z_ft,
+              
+              type =
+                "scatter3d",
+              
+              mode =
+                "markers",
+              
+              marker = list(
+                
+                size =
+                  9,
+                
+                color =
+                  "black"
+                
+              ),
+              
+              text =
+                initial_sensor_text,
+              
+              hoverinfo =
+                "text",
+              
+              name =
+                "Sensors",
+              
+              inherit =
+                FALSE
+              
+            ) %>%
+              
+              
+              # ======================================================
+            # ROOM DOOR
+            # ======================================================
+            
+            add_trace(
+              
+              type =
+                "scatter3d",
+              
+              mode =
+                "lines",
+              
+              x =
+                door_x,
+              
+              y =
+                door_y_values,
+              
+              z =
+                door_z,
+              
+              line = list(
+                
+                color =
+                  "black",
+                
+                width =
+                  8
+                
+              ),
+              
+              hoverinfo =
+                "none",
+              
+              name =
+                "Door",
+              
+              inherit =
+                FALSE
+              
+            ) %>%
+              
+              
+              # ======================================================
+            # 11.14 FORMAT INITIAL PLOT
+            # ======================================================
+            
+            layout(
+              
+              scene = list(
+                
+                # ------------------------------------------------
+                # X = WIDTH
+                # ------------------------------------------------
+                
+                xaxis = list(
+                  
+                  title =
+                    "Width (ft)",
+                  
+                  range = c(
+                    
+                    0,
+                    
+                    room_width
+                    
+                  )
+                  
+                ),
+                
+                
+                # ------------------------------------------------
+                # Y = LENGTH
+                # ------------------------------------------------
+                
+                yaxis = list(
+                  
+                  title =
+                    "Length (ft)",
+                  
+                  range = c(
+                    
+                    0,
+                    
+                    room_length
+                    
+                  )
+                  
+                ),
+                
+                
+                # ------------------------------------------------
+                # Z = HEIGHT
+                # ------------------------------------------------
+                
+                zaxis = list(
+                  
+                  title =
+                    "Height (ft)",
+                  
+                  range = c(
+                    
+                    0,
+                    
+                    room_height
+                    
+                  )
+                  
+                ),
+                
+                
+                # ------------------------------------------------
+                # ROOM PROPORTIONS
+                # ------------------------------------------------
+                
+                aspectmode =
+                  "data",
+                
+                
+                # ------------------------------------------------
+                # DEFAULT CAMERA
+                # ------------------------------------------------
+                
+                camera = list(
+                  
+                  eye = list(
+                    
+                    x = 1.5,
+                    
+                    y = 1.5,
+                    
+                    z = 1.1
+                    
+                  )
+                  
+                )
+                
+              ),
+              
+              
+              # ------------------------------------------------
+              # LEGEND
+              # ------------------------------------------------
+              
+              legend = list(
+                
+                x =
+                  0.01,
+                
+                y =
+                  0.99,
+                
+                xanchor =
+                  "left",
+                
+                yanchor =
+                  "top"
+                
+              )
+              
+            )
+            
+            
+            P
+            
+          })
+        
+        
+        # ============================================================
+        # 11.15 UPDATE ENVIRONMENTAL FIELD
+        # ============================================================
+        
+        observeEvent(
+          
+          list(
+            
+            input[[time_id]],
+            
+            input[[variable_id]]
+            
+          ),
+          
+          {
+            
+            req(
+              
+              input[[time_id]],
+              
+              input[[variable_id]]
+              
+            )
+            
             
             selected_time <-
               
@@ -1014,19 +1756,9 @@ server <- function(
               input[[variable_id]]
             
             
-            req(
-              selected_time
-            )
-            
-            
-            req(
-              selected_variable
-            )
-            
-            
-            # ==================================================
-            # 11.5 FILTER ENVIRONMENTAL FIELD
-            # ==================================================
+            # --------------------------------------------------------
+            # FILTER ENVIRONMENTAL FIELD
+            # --------------------------------------------------------
             
             field_data <-
               
@@ -1040,26 +1772,6 @@ server <- function(
               )
             
             
-            # ==================================================
-            # 11.6 FILTER SENSOR DATA
-            # ==================================================
-            
-            sensor_plot_data <-
-              
-              current_sensor_data %>%
-              
-              filter(
-                
-                Timestamp ==
-                  selected_time
-                
-              )
-            
-            
-            # ==================================================
-            # 11.7 VERIFY DATA
-            # ==================================================
-            
             req(
               
               nrow(
@@ -1069,18 +1781,16 @@ server <- function(
             )
             
             
-            req(
-              
-              nrow(
-                sensor_plot_data
-              ) > 0
-              
-            )
+            # --------------------------------------------------------
+            # GET FIELD VALUES
+            # --------------------------------------------------------
             
+            field_values <-
+              field_data[[selected_variable]]
             
-            # ==================================================
-            # 11.8 VARIABLE LABEL
-            # ==================================================
+            # --------------------------------------------------------
+            # VARIABLE LABEL
+            # --------------------------------------------------------
             
             variable_label <-
               
@@ -1103,312 +1813,121 @@ server <- function(
               )
             
             
-            # ============================================================
-            # 11.9 ROOM DIMENSIONS FROM METADATA
-            # ============================================================
+            # --------------------------------------------------------
+            # UPDATE TRACE 0
+            #
+            # Trace 0 = interpolated environmental field
+            # --------------------------------------------------------
             
-            room_width <-
+            plotlyProxy(
               
-              as.numeric(
+              outputId =
+                plot_id,
+              
+              session =
+                session
+              
+            ) %>%
+              
+              plotlyProxyInvoke(
                 
-                get_metadata_value(
+                "restyle",
+                
+                list(
                   
-                  current_metadata,
+                  marker = list(
+                    
+                    color =
+                      field_values,
+                    
+                    colorscale =
+                      "Viridis",
+                    
+                    opacity =
+                      0.15,
+                    
+                    size =
+                      10,
+                    
+                    symbol =
+                      "square",
+                    
+                    colorbar = list(
+                      
+                      title = list(
+                        
+                        text =
+                          variable_label
+                        
+                      ),
+                      
+                      x =
+                        1.12
+                      
+                    )
+                    
+                  )
                   
-                  "Room_Width_ft"
-                  
-                )
+                ),
+                
+                list(0)
+                
+              )
+            
+          },
+          
+          ignoreInit =
+            TRUE
+          
+        )
+        
+        
+        # ============================================================
+        # 11.16 UPDATE SENSOR LOCATIONS
+        # ============================================================
+        
+        observeEvent(
+          
+          input[[time_id]],
+          
+          {
+            
+            req(
+              input[[time_id]]
+            )
+            
+            
+            selected_time <-
+              
+              current_timepoints[
+                input[[time_id]]
+              ]
+            
+            
+            sensor_plot_data <-
+              
+              current_sensor_data %>%
+              
+              filter(
+                
+                Timestamp ==
+                  selected_time
                 
               )
             
             
-            room_length <-
+            req(
               
-              as.numeric(
-                
-                get_metadata_value(
-                  
-                  current_metadata,
-                  
-                  "Room_Length_ft"
-                  
-                )
-                
-              )
+              nrow(
+                sensor_plot_data
+              ) > 0
+              
+            )
             
             
-            room_height <-
-              
-              as.numeric(
-                
-                get_metadata_value(
-                  
-                  current_metadata,
-                  
-                  "Room_Height_ft"
-                  
-                )
-                
-              )
-            
-            
-            # ============================================================
-            # 11.10 DOOR DIMENSIONS FROM METADATA
-            # ============================================================
-            
-            door_wall <-
-              
-              get_metadata_value(
-                
-                current_metadata,
-                
-                "Door_Wall"
-                
-              )
-            
-            
-            door_width <-
-              
-              as.numeric(
-                
-                get_metadata_value(
-                  
-                  current_metadata,
-                  
-                  "Door_Width_ft"
-                  
-                )
-                
-              )
-            
-            
-            door_height <-
-              
-              as.numeric(
-                
-                get_metadata_value(
-                  
-                  current_metadata,
-                  
-                  "Door_Height_ft"
-                  
-                )
-                
-              )
-            
-            
-            door_center <-
-              
-              as.numeric(
-                
-                get_metadata_value(
-                  
-                  current_metadata,
-                  
-                  "Door_Center_ft"
-                  
-                )
-                
-              )
-            
-            # ============================================================
-            # 11.11 CREATE DOOR GEOMETRY
-            # ============================================================
-            
-            if (
-              
-              door_wall %in%
-              c("back", "front")
-              
-            ) {
-              
-              # ----------------------------------------------------------
-              # Door is on front/back wall
-              # Door center is an X coordinate
-              # ----------------------------------------------------------
-              
-              door_x1 <-
-                door_center -
-                door_width / 2
-              
-              
-              door_x2 <-
-                door_center +
-                door_width / 2
-              
-              
-              door_y <-
-                
-                if (
-                  
-                  door_wall == "front"
-                  
-                ) {
-                  
-                  room_length
-                  
-                } else {
-                  
-                  0
-                  
-                }
-              
-              
-              door_x <-
-                c(
-                  
-                  door_x1,
-                  door_x2,
-                  NA,
-                  
-                  door_x1,
-                  door_x1,
-                  NA,
-                  
-                  door_x2,
-                  door_x2
-                  
-                )
-              
-              
-              door_y_values <-
-                c(
-                  
-                  door_y,
-                  door_y,
-                  NA,
-                  
-                  door_y,
-                  door_y,
-                  NA,
-                  
-                  door_y,
-                  door_y
-                  
-                )
-              
-              
-              door_z <-
-                c(
-                  
-                  0,
-                  0,
-                  NA,
-                  
-                  0,
-                  door_height,
-                  NA,
-                  
-                  0,
-                  door_height
-                  
-                )
-              
-            }
-            
-            
-            if (
-              
-              door_wall %in%
-              c("left", "right")
-              
-            ) {
-              
-              # ----------------------------------------------------------
-              # Door is on left/right wall
-              # Door center is a Y coordinate
-              # ----------------------------------------------------------
-              
-              door_y1 <-
-                door_center -
-                door_width / 2
-              
-              
-              door_y2 <-
-                door_center +
-                door_width / 2
-              
-              
-              door_x_value <-
-                
-                if (
-                  
-                  door_wall == "right"
-                  
-                ) {
-                  
-                  room_width
-                  
-                } else {
-                  
-                  0
-                  
-                }
-              
-              
-              door_x <-
-                c(
-                  
-                  door_x_value,
-                  door_x_value,
-                  NA,
-                  
-                  door_x_value,
-                  door_x_value,
-                  NA,
-                  
-                  door_x_value,
-                  door_x_value
-                  
-                )
-              
-              
-              door_y_values <-
-                c(
-                  
-                  door_y1,
-                  door_y2,
-                  NA,
-                  
-                  door_y1,
-                  door_y1,
-                  NA,
-                  
-                  door_y2,
-                  door_y2
-                  
-                )
-              
-              
-              door_z <-
-                c(
-                  
-                  0,
-                  0,
-                  NA,
-                  
-                  0,
-                  door_height,
-                  NA,
-                  
-                  0,
-                  door_height
-                  
-                )
-              
-            }
-            
-            # ============================================================
-            # 11.11 FIELD VALUES
-            # ============================================================
-            
-            field_values <-
-              field_data[[selected_variable]]
-            
-            
-            # ==================================================
-            # 11.12 SENSOR HOVER TEXT
-            # ==================================================
+            # --------------------------------------------------------
+            # SENSOR HOVER TEXT
+            # --------------------------------------------------------
             
             sensor_text <- paste(
               
@@ -1467,254 +1986,60 @@ server <- function(
             )
             
             
-            # ==================================================
-            # 11.13 CREATE INTERPOLATED FIELD
-            # ==================================================
+            # --------------------------------------------------------
+            # UPDATE TRACE 1
+            #
+            # Trace 1 = sensor locations
+            # --------------------------------------------------------
             
-            P <- plot_ly(
+            plotlyProxy(
               
-              data =
-                field_data,
+              outputId =
+                plot_id,
               
-              x =
-                ~X_ft,
+              session =
+                session
               
-              y =
-                ~Y_ft,
+            ) %>%
               
-              z =
-                ~Z_ft,
-              
-              type =
-                "scatter3d",
-              
-              mode =
-                "markers",
-              
-              marker = list(
+              plotlyProxyInvoke(
                 
-                size =
-                  10,
+                "restyle",
                 
-                opacity =
-                  0.15,
-                
-                symbol =
-                  "square",
-                
-                color =
-                  field_values,
-                
-                colorscale =
-                  "Viridis",
-                
-                colorbar = list(
-                  
-                  title = list(
-                    
-                    text =
-                      variable_label
-                    
-                  ),
+                list(
                   
                   x =
-                    1.12
+                    list(
+                      sensor_plot_data$X_ft
+                    ),
                   
-                )
-                
-              ),
-              
-              hoverinfo =
-                "none",
-              
-              name =
-                "Estimated Values"
-              
-            ) %>%
-              
-              
-              # ==================================================
-            # 11.14 SENSOR LOCATIONS
-            # ==================================================
-            
-            add_trace(
-              
-              data =
-                sensor_plot_data,
-              
-              x =
-                ~X_ft,
-              
-              y =
-                ~Y_ft,
-              
-              z =
-                ~Z_ft,
-              
-              type =
-                "scatter3d",
-              
-              mode =
-                "markers",
-              
-              marker = list(
-                
-                size =
-                  9,
-                
-                color =
-                  "black"
-                
-              ),
-              
-              text =
-                sensor_text,
-              
-              hoverinfo =
-                "text",
-              
-              name =
-                "Sensors",
-              
-              inherit =
-                FALSE
-              
-            ) %>%
-              
-              
-              # ============================================================
-            # 11.15 ROOM DOOR
-            # ============================================================
-            
-            add_trace(
-              
-              type =
-                "scatter3d",
-              
-              mode =
-                "lines",
-              
-              x =
-                door_x,
-              
-              y =
-                door_y_values,
-              
-              z =
-                door_z,
-              
-              line = list(
-                
-                color =
-                  "black",
-                
-                width =
-                  8
-                
-              ),
-              
-              hoverinfo =
-                "none",
-              
-              name =
-                "Door",
-              
-              inherit =
-                FALSE
-              
-            ) %>%
-              
-              # ==================================================
-            # 11.16 FORMAT PLOT
-            # ==================================================
-            
-            layout(
-              
-              scene = list(
-                
-                # X = WIDTH
-                
-                xaxis = list(
+                  y =
+                    list(
+                      sensor_plot_data$Y_ft
+                    ),
                   
-                  title =
-                    "Width (ft)",
+                  z =
+                    list(
+                      sensor_plot_data$Z_ft
+                    ),
                   
-                  range = c(
-                    
-                    0,
-                    room_width
-                    
-                  )
+                  text =
+                    list(
+                      sensor_text
+                    )
                   
                 ),
                 
-                
-                # Y = LENGTH
-                
-                yaxis = list(
-                  
-                  title =
-                    "Length (ft)",
-                  
-                  range = c(
-                    
-                    0,
-                    room_length
-                    
-                  )
-                  
-                ),
-                
-                
-                # Z = HEIGHT
-                
-                zaxis = list(
-                  
-                  title =
-                    "Height (ft)",
-                  
-                  range = c(
-                    
-                    0,
-                    room_height
-                    
-                  )
-                  
-                ),
-                
-                aspectmode =
-                  "data"
-                
-              ),
-              
-              
-              legend = list(
-                
-                x =
-                  0.01,
-                
-                y =
-                  0.99,
-                
-                xanchor =
-                  "left",
-                
-                yanchor =
-                  "top"
+                list(1)
                 
               )
-              
-            )
             
-            
-            # ==================================================
-            # 11.17 RETURN PLOT
-            # ==================================================
-            
-            P
-            
-            
-          })
+          },
+          
+          ignoreInit =
+            TRUE
+          
+        )
         
       })
       

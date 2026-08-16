@@ -11,7 +11,7 @@ This notebook is designed to analyze environmental data collected from a warehou
 # DEFINE EXPERIMENT NAME
 # ---------------
 
-experiment_name <- "Penetration_Test"
+experiment_name <- "Test_Sensor_Data"
 
 ```
 This should match the name of the data file (without the .xlsx extension) in the Data folder. For example, if the data file is named "Experiment.xlsx", then experiment_name should be set to "Experiment".
@@ -41,9 +41,9 @@ processed_folder <-
 # Z = Height
 # Z increases from floor -> ceiling
 
-room_width_ft  <- 25 # ft
+room_width_ft  <- 35 # ft
 
-room_length_ft <- 35 # ft
+room_length_ft <- 25 # ft
 
 room_height_ft <- 30 # ft
 
@@ -69,9 +69,9 @@ room
 door_wall <- "front"
 
 
-door_width_ft <- 12
+door_width_ft <- 10
 
-door_height_ft <- 14
+door_height_ft <- 12
 
 
 # Position of CENTER of door
@@ -84,7 +84,7 @@ door_height_ft <- 14
 
 
 door_center_ft <-
-  room_width_ft - 8   #This sets the center of the door to 8 ft from the total room length. Adjust as needed. 
+  room_width_ft - 18   #This sets the center of the door to 8 ft from the total room length. Adjust as needed. 
 ```
 
 ## Spatial Resolution for Interpolation

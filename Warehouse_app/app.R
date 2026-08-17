@@ -19,9 +19,11 @@ library(viridisLite)
 # ============================================================
 
 data_folder <-
-  "C:/Users/Daniel Jackson/Desktop/R/Warehouse Environments Analysis/Processed_Data"
-
-
+  processed_folder <-
+  file.path(
+    getwd(),
+    "Processed_Data"
+  )
 # ============================================================
 # 3. FIND ALL EXPERIMENT FILES
 # ============================================================

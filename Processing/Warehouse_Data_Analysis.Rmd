@@ -11,7 +11,7 @@ This notebook is designed to analyze environmental data collected from a warehou
 # DEFINE EXPERIMENT NAME
 # ---------------
 
-experiment_name <- "Test_Sensor_Data"
+experiment_name <- "Cooler_10"
 
 ```
 This should match the name of the data file (without the .xlsx extension) in the Data folder. For example, if the data file is named "Experiment.xlsx", then experiment_name should be set to "Experiment".
@@ -41,11 +41,11 @@ processed_folder <-
 # Z = Height
 # Z increases from floor -> ceiling
 
-room_width_ft  <- 35 # ft
+room_width_ft  <- 40 # ft
 
-room_length_ft <- 25 # ft
+room_length_ft <- 72 # ft
 
-room_height_ft <- 30 # ft
+room_height_ft <- 20 # ft
 
 room <- list(
   width = room_width_ft,
@@ -84,7 +84,7 @@ door_height_ft <- 12
 
 
 door_center_ft <-
-  room_width_ft - 18   #This sets the center of the door to 8 ft from the total room length. Adjust as needed. 
+  room_width_ft - 15   #This sets the center of the door to 8 ft from the total room length. Adjust as needed. 
 ```
 
 ## Spatial Resolution for Interpolation
@@ -223,7 +223,7 @@ library(viridisLite)
 
 ## Import Excel data
 ```{r}
-i# ============================================================
+# ============================================================
 # 4. IMPORT EXPERIMENT DATA
 # ============================================================
 
